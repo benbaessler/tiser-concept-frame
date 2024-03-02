@@ -1,5 +1,12 @@
 import { Button, Frog } from "frog";
 import { handle } from "frog/vercel";
+import { checkEligibility } from "./neynar.js";
+
+// Constants
+const ipfsGateway = "aquamarine-creepy-gayal-340.mypinata.cloud";
+const ipfsHash = "QmahqxxyJLtFUxDRDELvJSWFWvWtMvXgmWnJennDwznsNb";
+
+const minFollowers = 400;
 
 // Uncomment to use Edge Runtime.
 // export const config = {
@@ -8,51 +15,45 @@ import { handle } from "frog/vercel";
 
 type State = {
   page: number;
-  promote: string | null;
+  promote: boolean;
 };
-
-const ipfsGateway = "aquamarine-creepy-gayal-340.mypinata.cloud";
-const ipfsHash = "QmahqxxyJLtFUxDRDELvJSWFWvWtMvXgmWnJennDwznsNb";
 
 export const app = new Frog<State>({
   basePath: "/api",
   initialState: {
     page: 0,
-    promote: null,
+    promote: false,
   },
   // Supply a Hub API URL to enable frame verification.
   // hubApiUrl: 'https://api.hub.wevm.dev',
 });
 
-app.frame("/", (c) => {
+app.frame("/", async (c) => {
   const { buttonValue, deriveState, frameData, verified } = c;
   if (!verified) console.log("Frame verification failed");
 
-  const buttons = {
-    prev: <Button value="prev">{"<"}</Button>,
-    next: <Button value="next">{">"}</Button>,
-    reset: <Button value="reset">Back to start</Button>,
-    promote: <Button value="promote">Promote and earn</Button>,
-  };
-
-  let intents;
+  // TODO: use frameData
+  const fid = 191294;
 
   const state = deriveState((previousState) => {
     if (buttonValue === "next") previousState.page++;
     if (buttonValue === "prev") previousState.page--;
-    if (buttonValue === "reset") previousState.page = 0;
-
-    if (buttonValue === "promote") previousState.promote = "eligible";
-
-    if (previousState.page === 0) intents = [buttons.next, buttons.promote];
-    else if (previousState.page === 4)
-      intents = [buttons.prev, buttons.reset, buttons.promote];
-    else intents = [buttons.prev, buttons.next, buttons.promote];
+    if (buttonValue === "reset") {
+      previousState.promote = false;
+      previousState.page = 0;
+    }
+    if (buttonValue === "promote") previousState.promote = true;
   });
+
+  let promotePage: string | null = null;
+  if (frameData && state.promote) {
+    const eligible = await checkEligibility(fid, minFollowers);
+    promotePage = eligible ? "eligible" : "ineligible";
+  }
 
   return c.res({
     image:
-      state.promote === "eligible" ? (
+      promotePage === "eligible" ? (
         <div
           style={{
             display: "flex",
@@ -62,7 +63,7 @@ app.frame("/", (c) => {
             width: "100%",
             height: "100%",
             fontSize: "50px",
-            fontWeight: "bold"
+            fontWeight: "bold",
           }}
         >
           <span>You are eligible to earn</span>
@@ -70,7 +71,15 @@ app.frame("/", (c) => {
       ) : (
         `https://${ipfsGateway}/ipfs/${ipfsHash}/${state.page}.png`
       ),
-    intents,
+    intents: [
+      !state.promote && state.page > 0 && <Button value="prev">{"<"}</Button>,
+      !state.promote && state.page !== 4 && <Button value="next">{">"}</Button>,
+      (state.page === 4 || state.promote) && (
+        <Button value="reset">Back to start</Button>
+      ),
+      !state.promote && <Button value="promote">Promote and earn</Button>,
+      promotePage === "eligible" && <Button value="claim">Claim</Button>,
+    ],
   });
 });
 
