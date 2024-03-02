@@ -1,66 +1,78 @@
-import { Button, Frog, TextInput } from 'frog'
-import { handle } from 'frog/vercel'
+import { Button, Frog } from "frog";
+import { handle } from "frog/vercel";
 
 // Uncomment to use Edge Runtime.
 // export const config = {
 //   runtime: 'edge',
 // }
 
-export const app = new Frog({
-  basePath: '/api',
+type State = {
+  page: number;
+  promote: string | null;
+};
+
+const ipfsGateway = "aquamarine-creepy-gayal-340.mypinata.cloud";
+const ipfsHash = "QmahqxxyJLtFUxDRDELvJSWFWvWtMvXgmWnJennDwznsNb";
+
+export const app = new Frog<State>({
+  basePath: "/api",
+  initialState: {
+    page: 0,
+    promote: null,
+  },
   // Supply a Hub API URL to enable frame verification.
   // hubApiUrl: 'https://api.hub.wevm.dev',
-})
+});
 
-app.frame('/', (c) => {
-  const { buttonValue, inputText, status } = c
-  const fruit = inputText || buttonValue
+app.frame("/", (c) => {
+  const { buttonValue, deriveState, frameData, verified } = c;
+  if (!verified) console.log("Frame verification failed");
+
+  const buttons = {
+    prev: <Button value="prev">{"<"}</Button>,
+    next: <Button value="next">{">"}</Button>,
+    reset: <Button value="reset">Back to start</Button>,
+    promote: <Button value="promote">Promote and earn</Button>,
+  };
+
+  let intents;
+
+  const state = deriveState((previousState) => {
+    if (buttonValue === "next") previousState.page++;
+    if (buttonValue === "prev") previousState.page--;
+    if (buttonValue === "reset") previousState.page = 0;
+
+    if (buttonValue === "promote") previousState.promote = "eligible";
+
+    if (previousState.page === 0) intents = [buttons.next, buttons.promote];
+    else if (previousState.page === 4)
+      intents = [buttons.prev, buttons.reset, buttons.promote];
+    else intents = [buttons.prev, buttons.next, buttons.promote];
+  });
+
   return c.res({
-    image: (
-      <div
-        style={{
-          alignItems: 'center',
-          background:
-            status === 'response'
-              ? 'linear-gradient(to right, #432889, #17101F)'
-              : 'black',
-          backgroundSize: '100% 100%',
-          display: 'flex',
-          flexDirection: 'column',
-          flexWrap: 'nowrap',
-          height: '100%',
-          justifyContent: 'center',
-          textAlign: 'center',
-          width: '100%',
-        }}
-      >
+    image:
+      state.promote === "eligible" ? (
         <div
           style={{
-            color: 'white',
-            fontSize: 60,
-            fontStyle: 'normal',
-            letterSpacing: '-0.025em',
-            lineHeight: 1.4,
-            marginTop: 30,
-            padding: '0 120px',
-            whiteSpace: 'pre-wrap',
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "white",
+            width: "100%",
+            height: "100%",
+            fontSize: "50px",
+            fontWeight: "bold"
           }}
         >
-          {status === 'response'
-            ? `Nice choice.${fruit ? ` ${fruit.toUpperCase()}!!` : ''}`
-            : 'Welcome!'}
+          <span>You are eligible to earn</span>
         </div>
-      </div>
-    ),
-    intents: [
-      <TextInput placeholder="Enter custom fruit..." />,
-      <Button value="apples">Apples</Button>,
-      <Button value="oranges">Oranges</Button>,
-      <Button value="bananas">Bananas</Button>,
-      status === 'response' && <Button.Reset>Reset</Button.Reset>,
-    ],
-  })
-})
+      ) : (
+        `https://${ipfsGateway}/ipfs/${ipfsHash}/${state.page}.png`
+      ),
+    intents,
+  });
+});
 
-export const GET = handle(app)
-export const POST = handle(app)
+export const GET = handle(app);
+export const POST = handle(app);
