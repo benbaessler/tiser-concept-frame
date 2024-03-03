@@ -1,10 +1,11 @@
 import { Button, Frog } from "frog";
 import { handle } from "frog/vercel";
-import { checkEligibility } from "./neynar.js";
+import { checkEligibility, checkRecasted } from "./neynar.js";
 
 // Constants
 const ipfsGateway = "aquamarine-creepy-gayal-340.mypinata.cloud";
-const ipfsHash = "QmahqxxyJLtFUxDRDELvJSWFWvWtMvXgmWnJennDwznsNb";
+const ipfsHash = "QmNYTMexX5G4jQytqJr8SMQFUfG4m8zj76JqDRmv2maNU9";
+const ipfsPath = `https://${ipfsGateway}/ipfs/${ipfsHash}/`;
 
 const minFollowers = 400;
 
@@ -34,6 +35,7 @@ app.frame("/", async (c) => {
 
   // TODO: use frameData
   const fid = 191294;
+  const castHash = "0x9288c1e862aa72bd69d0e383a28b9a76b63cbdb4";
 
   const state = deriveState((previousState) => {
     if (buttonValue === "next") previousState.page++;
@@ -47,30 +49,19 @@ app.frame("/", async (c) => {
 
   let promotePage: string | null = null;
   if (frameData && state.promote) {
-    const eligible = await checkEligibility(fid, minFollowers);
-    promotePage = eligible ? "eligible" : "ineligible";
+    if (buttonValue === "claim") {
+      const recasted = await checkRecasted(fid, castHash);
+      promotePage = recasted ? "claimed" : "claim-error";
+    } else {
+      const eligible = await checkEligibility(fid, minFollowers);
+      promotePage = eligible ? "eligible" : "ineligible";
+    }
   }
 
   return c.res({
-    image:
-      promotePage === "eligible" ? (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: "white",
-            width: "100%",
-            height: "100%",
-            fontSize: "50px",
-            fontWeight: "bold",
-          }}
-        >
-          <span>You are eligible to earn</span>
-        </div>
-      ) : (
-        `https://${ipfsGateway}/ipfs/${ipfsHash}/${state.page}.png`
-      ),
+    image: state.promote
+      ? `${ipfsPath}/${promotePage}.png`
+      : `${ipfsPath}/${state.page}.png`,
     intents: [
       !state.promote && state.page > 0 && <Button value="prev">{"<"}</Button>,
       !state.promote && state.page !== 4 && <Button value="next">{">"}</Button>,
@@ -78,7 +69,9 @@ app.frame("/", async (c) => {
         <Button value="reset">Back to start</Button>
       ),
       !state.promote && <Button value="promote">Promote and earn</Button>,
-      promotePage === "eligible" && <Button value="claim">Claim</Button>,
+      ["eligible", "claim-error"].includes(promotePage!) && (
+        <Button value="claim">Claim</Button>
+      ),
     ],
   });
 });
