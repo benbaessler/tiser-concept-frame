@@ -25,7 +25,7 @@ export const sendReward = async (address: string) => {
     address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     abi: ERC20_ABI,
     functionName: "transfer",
-    args: [address, 100],
+    args: [address, 5000000],
     account,
   });
   const txHash = await walletClient.writeContract(request);
