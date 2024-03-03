@@ -1,10 +1,16 @@
 import { Button, Frog } from "frog";
 import { handle } from "frog/vercel";
-import { checkEligibility, checkRecasted } from "./neynar.js";
+import {
+  checkEligibility,
+  checkRecasted,
+  addPromoter,
+  promotionActive,
+  checkClaimed,
+} from "./utils.js";
 
 // Constants
 const ipfsGateway = "aquamarine-creepy-gayal-340.mypinata.cloud";
-const ipfsHash = "QmNYTMexX5G4jQytqJr8SMQFUfG4m8zj76JqDRmv2maNU9";
+const ipfsHash = "QmUFr1C8isq9rGHNkgkNErK9pQ4auKnYeBVnpvXcB37m7L";
 const ipfsPath = `https://${ipfsGateway}/ipfs/${ipfsHash}/`;
 
 const minFollowers = 400;
@@ -26,16 +32,12 @@ export const app = new Frog<State>({
     promote: false,
   },
   // Supply a Hub API URL to enable frame verification.
-  // hubApiUrl: 'https://api.hub.wevm.dev',
+  hubApiUrl: "https://api.hub.wevm.dev",
 });
 
 app.frame("/", async (c) => {
   const { buttonValue, deriveState, frameData, verified } = c;
   if (!verified) console.log("Frame verification failed");
-
-  // TODO: use frameData
-  const fid = 191294;
-  const castHash = "0x9288c1e862aa72bd69d0e383a28b9a76b63cbdb4";
 
   const state = deriveState((previousState) => {
     if (buttonValue === "next") previousState.page++;
@@ -49,19 +51,39 @@ app.frame("/", async (c) => {
 
   let promotePage: string | null = null;
   if (frameData && state.promote) {
+    const { fid, castId } = frameData;
+    // const { hash } = castId;
+    // const hash = "0x9288c1e862aa72bd69d0e383a28b9a76b63cbdb4" // not recasted
+    const hash = "0x26e5084d3b7ad515ba9366e4b8dff520ef6a38f2"; // recasted
     if (buttonValue === "claim") {
-      const recasted = await checkRecasted(fid, castHash);
-      promotePage = recasted ? "claimed" : "claim-error";
+      const recasted = await checkRecasted(fid, hash);
+      if (recasted) {
+        await addPromoter(fid);
+        promotePage = "claimed";
+      } else {
+        promotePage = "claim-error";
+      }
     } else {
-      const eligible = await checkEligibility(fid, minFollowers);
-      promotePage = eligible ? "eligible" : "ineligible";
+      const claimed = await checkClaimed(fid);
+      if (claimed) {
+        promotePage = "already-claimed";
+      } else {
+        const active = await promotionActive();
+        if (active) {
+          const eligible = await checkEligibility(fid, minFollowers);
+          promotePage = eligible ? "eligible" : "ineligible";
+        } else {
+          promotePage = "inactive";
+        }
+      }
     }
   }
 
   return c.res({
-    image: state.promote
-      ? `${ipfsPath}/${promotePage}.png`
-      : `${ipfsPath}/${state.page}.png`,
+    image:
+      state.promote && promotePage !== null
+        ? `${ipfsPath}/${promotePage}.png`
+        : `${ipfsPath}/${state.page}.png`,
     intents: [
       !state.promote && state.page > 0 && <Button value="prev">{"<"}</Button>,
       !state.promote && state.page !== 4 && <Button value="next">{">"}</Button>,
