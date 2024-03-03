@@ -15,7 +15,7 @@ const ipfsGateway = "aquamarine-creepy-gayal-340.mypinata.cloud";
 const ipfsHash = "QmXzw6Zott9Eyo4MUEDMVRWVkVPh6DMRDUSadhWBVU8mBz";
 const ipfsPath = `https://${ipfsGateway}/ipfs/${ipfsHash}/`;
 
-const minFollowers = 400;
+const minFollowers = 10000;
 
 // Uncomment to use Edge Runtime.
 // export const config = {
