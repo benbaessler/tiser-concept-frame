@@ -6,11 +6,13 @@ import {
   addPromoter,
   promotionActive,
   checkClaimed,
+  sendReward,
+  getAddress,
 } from "./utils.js";
 
 // Constants
 const ipfsGateway = "aquamarine-creepy-gayal-340.mypinata.cloud";
-const ipfsHash = "QmUFr1C8isq9rGHNkgkNErK9pQ4auKnYeBVnpvXcB37m7L";
+const ipfsHash = "QmXzw6Zott9Eyo4MUEDMVRWVkVPh6DMRDUSadhWBVU8mBz";
 const ipfsPath = `https://${ipfsGateway}/ipfs/${ipfsHash}/`;
 
 const minFollowers = 400;
@@ -50,14 +52,17 @@ app.frame("/", async (c) => {
   });
 
   let promotePage: string | null = null;
+  let txHash;
+
   if (frameData && state.promote) {
     const { fid, castId } = frameData;
-    // const { hash } = castId;
-    // const hash = "0x9288c1e862aa72bd69d0e383a28b9a76b63cbdb4" // not recasted
-    const hash = "0x26e5084d3b7ad515ba9366e4b8dff520ef6a38f2"; // recasted
+    const { hash } = castId;
     if (buttonValue === "claim") {
       const recasted = await checkRecasted(fid, hash);
       if (recasted) {
+        const address = await getAddress(fid);
+        txHash = await sendReward(address!);
+
         await addPromoter(fid);
         promotePage = "claimed";
       } else {
@@ -71,7 +76,16 @@ app.frame("/", async (c) => {
         const active = await promotionActive();
         if (active) {
           const eligible = await checkEligibility(fid, minFollowers);
-          promotePage = eligible ? "eligible" : "ineligible";
+          if (eligible) {
+            const address = await getAddress(fid);
+            if (address) {
+              promotePage = "eligible";
+            } else {
+              promotePage = "no-wallet";
+            }
+          } else {
+            promotePage = "ineligible";
+          }
         } else {
           promotePage = "inactive";
         }
@@ -93,6 +107,11 @@ app.frame("/", async (c) => {
       !state.promote && <Button value="promote">Promote and earn</Button>,
       ["eligible", "claim-error"].includes(promotePage!) && (
         <Button value="claim">Claim</Button>
+      ),
+      promotePage === "claimed" && txHash && (
+        <Button.Link href={`https://basescan.org/tx/${txHash}`}>
+          Transaction
+        </Button.Link>
       ),
     ],
   });
